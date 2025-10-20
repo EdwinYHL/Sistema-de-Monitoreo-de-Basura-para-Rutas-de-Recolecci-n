@@ -29,11 +29,11 @@ graph TB
 ---
 ## Componentes del Stack
 
-- Raspberry Pi: Simulador micro:bit V2 y gateway MQTT
-- Mosquitto MQTT Broker: Servidor MQTT en AWS EC2
+- Raspberry Pi: Gateway IoT y simulador de sensores ultrasónicos
+- Mosquitto MQTT Broker: Servidor de mensajería en AWS EC2
 - InfluxDB 2.x: Base de datos de series de tiempo
-- Grafana: Plataforma de visualización y dashboards
-- Python Scripts: Simulador micro:bit y bridge MQTT-InfluxDB
+- Grafana: Visualización de métricas en tiempo real
+- Python Scripts: Simulador de sensores, publicador MQTT y bridge InfluxDB
 
 ---
 ## Video Demostración
@@ -50,13 +50,14 @@ graph TB
 sudo apt update
 sudo apt install mosquitto mosquitto-clients -y
 
-# Configuración del broker
-sudo nano /etc/mosquitto/conf.d/default.conf
+# Activar servicios
+sudo systemctl enable mosquitto
+sudo systemctl start mosquitto
 ```
 
 ### 2. Simulador micro:bit en Raspberry Pi
 
-Archivo: microbit_simulator.py
+Archivo: sensor_basura_simulator.py
 
 ```
 #!/usr/bin/env python3
@@ -65,31 +66,30 @@ import time
 import random
 from datetime import datetime
 
-def microbit_simulator():
-    device_id = "microbit-01"
-    seq = 0
-    
+def simulador_contenedores():
+    contenedores = ["cont-001", "cont-002", "cont-003"]
+    ubicaciones = ["Centro", "Zona Norte", "Parque Industrial"]
+
     while True:
-        data = {
-            "deviceId": device_id,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "temperature": round(random.uniform(18.0, 35.0), 2),
-            "light_level": random.randint(0, 255),
-            "sequence": seq,
-            "status": "active"
-        }
-        
-        print(json.dumps(data))
-        seq += 1
-        time.sleep(5)
+        for i, contenedor in enumerate(contenedores):
+            data = {
+                "contenedor_id": contenedor,
+                "ubicacion": ubicaciones[i],
+                "porcentaje_lleno": round(random.uniform(0, 100), 2),
+                "temperatura": round(random.uniform(20, 45), 2),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+
+            print(json.dumps(data))
+            time.sleep(3)
 
 if __name__ == "__main__":
-    microbit_simulator()
+    simulador_contenedores()
 ```
 
 ### 3. Gateway MQTT en Raspberry Pi
 
-Archivo: raspberry_gateway.py
+Archivo: gateway_basura.py
 
 ```
 #!/usr/bin/env python3
@@ -99,39 +99,34 @@ import random
 import paho.mqtt.client as mqtt
 from datetime import datetime
 
-# CONFIGURACIÓN - IP de tu EC2
-MQTT_BROKER = "3.85.201.184"
+MQTT_BROKER = "3.85.201.184"  # IP pública de tu EC2
 MQTT_PORT = 1883
-MQTT_TOPIC = "lab/microbit/telemetry"
+MQTT_TOPIC = "ciudad/basura/contenedores"
 
 client = mqtt.Client()
 client.connect(MQTT_BROKER, MQTT_PORT, 60)
 client.loop_start()
 
-print("🚀 Gateway iniciado - Generando y enviando datos micro:bit...")
+print("🚀 Gateway iniciado - Enviando datos de contenedores...")
 
-device_id = "microbit-01"
-seq = 0
+contenedores = ["cont-001", "cont-002", "cont-003"]
+ubicaciones = ["Centro", "Zona Norte", "Parque Industrial"]
 
 while True:
     try:
-        # Generar datos directamente
-        data = {
-            "deviceId": device_id,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "temperature": round(random.uniform(18.0, 35.0), 2),
-            "light_level": random.randint(0, 255),
-            "sequence": seq,
-            "status": "active"
-        }
-        
-        # Enviar via MQTT
-        client.publish(MQTT_TOPIC, json.dumps(data))
-        print(f"📤 [{seq}] Enviado: {data['temperature']}°C, Luz: {data['light_level']}")
-        
-        seq += 1
+        for i, contenedor in enumerate(contenedores):
+            data = {
+                "contenedor_id": contenedor,
+                "ubicacion": ubicaciones[i],
+                "porcentaje_lleno": round(random.uniform(0, 100), 2),
+                "temperatura": round(random.uniform(20, 45), 2),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+
+            client.publish(MQTT_TOPIC, json.dumps(data))
+            print(f"📤 {contenedor} → {data['porcentaje_lleno']}% lleno, Temp: {data['temperatura']}°C")
+
         time.sleep(5)
-            
     except Exception as e:
         print(f"❌ Error: {e}")
         time.sleep(5)
@@ -139,7 +134,7 @@ while True:
 
 ### 4. Bridge MQTT-InfluxDB en AWS EC2
 
-Archivo: mqtt_to_influxdb.py
+Archivo: basura_to_influxdb.py
 
 ```
 #!/usr/bin/env python3
@@ -150,45 +145,41 @@ from influxdb_client import InfluxDBClient, Point, WritePrecision
 
 # Configuración
 MQTT_BROKER = "localhost"
-MQTT_TOPIC = "lab/microbit/telemetry"
+MQTT_TOPIC = "ciudad/basura/contenedores"
 
 INFLUXDB_URL = "http://localhost:8086"
-INFLUXDB_TOKEN = "microbit-token-final"
+INFLUXDB_TOKEN = "token-basura-monitoring"
 INFLUXDB_ORG = "IoTOrg"
-INFLUXDB_BUCKET = "microbit-data"
+INFLUXDB_BUCKET = "basura-data"
 
 # Clientes
 influx_client = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
 write_api = influx_client.write_api()
-
 mqtt_client = mqtt.Client()
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print("✅ Conectado a MQTT Broker")
         client.subscribe(MQTT_TOPIC)
-        print(f"✅ Suscrito al topic: {MQTT_TOPIC}")
     else:
         print(f"❌ Error conexión MQTT: {rc}")
 
 def on_message(client, userdata, msg):
     try:
         data = json.loads(msg.payload.decode())
-        print(f"📨 Recibido: {data['deviceId']} - Temp: {data['temperature']}°C")
-        
+        print(f"📨 Recibido: {data['contenedor_id']} - {data['porcentaje_lleno']}%")
+
         point = (
-            Point("microbit_sensors")
-            .tag("device_id", data["deviceId"])
-            .tag("status", data["status"])
-            .field("temperature", float(data["temperature"]))
-            .field("light_level", int(data["light_level"]))
-            .field("sequence", int(data["sequence"]))
+            Point("contenedores_basura")
+            .tag("contenedor_id", data["contenedor_id"])
+            .tag("ubicacion", data["ubicacion"])
+            .field("porcentaje_lleno", float(data["porcentaje_lleno"]))
+            .field("temperatura", float(data["temperatura"]))
             .time(datetime.utcnow(), WritePrecision.NS)
         )
-        
+
         write_api.write(bucket=INFLUXDB_BUCKET, record=point)
         print("✅ Datos guardados en InfluxDB")
-        
     except Exception as e:
         print(f"❌ Error procesando mensaje: {e}")
 
@@ -203,24 +194,21 @@ except KeyboardInterrupt:
     print("🛑 Deteniendo bridge...")
     mqtt_client.disconnect()
     influx_client.close()
-except Exception as e:
-    print(f"❌ Error: {e}")
 ```
 
 ### 5. Configuración del Servicio Systemd en EC2
 
-Archivo: /etc/systemd/system/microbit_bridge.service
+Archivo: /etc/systemd/system/basura_bridge.service
 
 ```
-Description=Microbit MQTT to InfluxDB Bridge
+Description=Bridge MQTT a InfluxDB - Sistema Basura IoT
 After=network.target mosquitto.service
 
 [Service]
 Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu
-Environment=PATH=/home/ubuntu/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=/home/ubuntu/venv/bin/python /home/ubuntu/mqtt_to_influxdb.py
+ExecStart=/usr/bin/python3 /home/ubuntu/sistema-basura-iot/src/basura_to_influxdb.py
 Restart=always
 RestartSec=10
 
@@ -231,14 +219,14 @@ WantedBy=multi-user.target
 Comandos de gestión:
 ```
 sudo systemctl daemon-reload
-sudo systemctl enable microbit_bridge.service
-sudo systemctl start microbit_bridge.service
-sudo systemctl status microbit_bridge.service
+sudo systemctl enable basura_bridge.service
+sudo systemctl start basura_bridge.service
+sudo systemctl status basura_bridge.service
 ```
 
 ---
 ## Conclusión
 
-Se implementó exitosamente un sistema IoT completo utilizando un micro:bit V2 simulado en Raspberry Pi, que demuestra la integración de dispositivos IoT con servicios en la nube de AWS.
-El sistema transmite telemetría de temperatura y luz ambiental mediante MQTT, almacena los datos en InfluxDB como series de tiempo y los visualiza en dashboards interactivos de Grafana.
-La arquitectura es escalable y puede adaptarse para múltiples dispositivos micro:bit reales, proporcionando una base sólida para aplicaciones de monitoreo ambiental en tiempo real.
+Se desarrolló e implementó un sistema IoT funcional para el monitoreo inteligente de contenedores de basura, demostrando la integración de MQTT, InfluxDB y Grafana sobre una arquitectura en AWS EC2.
+El sistema permite registrar telemetría simulada de sensores, almacenar datos como series de tiempo y visualizar las métricas en tiempo real.
+La infraestructura resultante es escalable, modular y fácilmente adaptable para sensores reales en escenarios urbanos, contribuyendo al desarrollo de ciudades inteligentes y sostenibles.
