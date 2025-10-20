@@ -195,6 +195,7 @@ except KeyboardInterrupt:
     mqtt_client.disconnect()
     influx_client.close()
 ```
+![Descripción de la imagen](https://raw.githubusercontent.com/EdwinYHL/-MQTT-Essentials-Resources/refs/heads/main/Captura%20de%20pantalla%202025-10-19%20205534.png)
 
 ### 5. Configuración del Servicio Systemd en EC2
 
@@ -215,6 +216,7 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 ```
+![Descripción de la imagen](https://raw.githubusercontent.com/EdwinYHL/-MQTT-Essentials-Resources/refs/heads/main/Captura%20de%20pantalla%202025-10-19%20205548.png)
 
 Comandos de gestión:
 ```
