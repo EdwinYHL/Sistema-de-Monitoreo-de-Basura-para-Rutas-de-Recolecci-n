@@ -41,6 +41,9 @@ graph TB
 🎥 https://www.loom.com/share/cd556f8b4e4048f9885f0a24a805c367
 
 ---
+## Presentación
+https://www.canva.com/design/DAG2Sa8wvhE/_niuPRQVdkKLb6OKQsDf5A/view
+---
 ## Implementación Técnica
 
 ### 1. Configuración del Broker MQTT en AWS EC2
@@ -225,7 +228,7 @@ sudo systemctl enable basura_bridge.service
 sudo systemctl start basura_bridge.service
 sudo systemctl status basura_bridge.service
 ```
-
+![Imagen MQTT](https://raw.githubusercontent.com/EdwinYHL/-MQTT-Essentials-Resources/refs/heads/main/Captura%20de%20pantalla%202025-10-17%20204850.png)
 ---
 ## Conclusión
 
