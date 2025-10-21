@@ -38,7 +38,7 @@ graph TB
 ---
 ## Video Demostración
 
-🎥 https://www.loom.com/share/cd556f8b4e4048f9885f0a24a805c367
+🎥 
 
 ---
 ## Presentación
