@@ -228,7 +228,7 @@ sudo systemctl enable basura_bridge.service
 sudo systemctl start basura_bridge.service
 sudo systemctl status basura_bridge.service
 ```
-![Imagen MQTT](https://raw.githubusercontent.com/EdwinYHL/-MQTT-Essentials-Resources/refs/heads/main/Captura%20de%20pantalla%202025-10-17%20204850.png)
+
 ---
 ## Conclusión
 
